@@ -1,3 +1,3 @@
-module mysql-backup
+module main
 
 go 1.13
