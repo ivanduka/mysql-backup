@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"strings"
 )
 import "github.com/joho/godotenv"
 import "database/sql"
@@ -32,7 +34,7 @@ func isUserDB(db string) bool {
 }
 
 func getConn(databaseName string) (*sql.DB, error) {
-	connStr := fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", os.Getenv("DB_NAME"), os.Getenv("DB_PASS"),
+	connStr := fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", os.Getenv("DB_USER"), os.Getenv("DB_PASS"),
 		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), databaseName)
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {
@@ -109,10 +111,32 @@ func getDatabasesAndTables() ([]database, error) {
 	return databases, nil
 }
 
+func saveDump(db, table string) (string, error) {
+	mysqldumpDir := os.Getenv("MYSQLDUMP_DIR")
+	savePath := fmt.Sprintf("%v%v-%v.sql", os.Getenv("SAVE_FOLDER"), db, table)
+	args := []string{"-u", os.Getenv("DB_USER"), "--password=" + os.Getenv("DB_PASS"),
+		"--host", os.Getenv("DB_HOST"), db, table,
+		"--skip-lock-tables", "--result-file", savePath, "--default-character-set=utf8", "--no-create-db",
+		"--skip-add-drop-table", "--protocol=tcp", "--single-transaction", "--quick"}
+	cmd := exec.Command(mysqldumpDir+"mysqldump", args...)
+	cmd.Dir = mysqldumpDir
+	fmt.Println(cmd.Env)
+	out, err := cmd.CombinedOutput()
+	annoyingWarning := "mysqldump: [Warning] Using a password on the command line interface can be insecure."
+	result := strings.TrimSpace(strings.Replace(string(out), annoyingWarning, "", -1))
+	return result, err
+}
+
 func main() {
-	data, err := getDatabasesAndTables()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(data)
+	//databases, err := getDatabasesAndTables()
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+
+	//for _, db := range databases {
+	//	for _, table := range db.tables {
+	//		fmt.Println(saveDump(db.dbName, table))
+	//	}
+	//}
+	fmt.Println(saveDump("abc", "pdfs"))
 }
