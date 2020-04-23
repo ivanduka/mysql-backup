@@ -12,17 +12,24 @@ import (
 import "github.com/joho/godotenv"
 import "database/sql"
 import _ "github.com/go-sql-driver/mysql"
+import "github.com/sendgrid/sendgrid-go"
+import "github.com/sendgrid/sendgrid-go/helpers/mail"
 
 var s *settings
 
 type settings struct {
-	dbUser       string
-	dbPass       string
-	dbHost       string
-	dbPort       string
-	mysqlDumpDir string
-	saveDir      string
-	sevenZipPath string
+	dbUser           string
+	dbPass           string
+	dbHost           string
+	dbPort           string
+	mysqlDumpDir     string
+	saveDir          string
+	sevenZipPath     string
+	sendgridAPIKey   string
+	emailToAddress   string
+	emailToName      string
+	emailFromName    string
+	emailFromAddress string
 }
 
 type database struct {
@@ -36,18 +43,23 @@ func init() {
 		log.Fatal("cannot load environmental variables")
 	}
 	s = &settings{
-		dbUser:       os.Getenv("DB_USER"),
-		dbPass:       os.Getenv("DB_PASS"),
-		dbHost:       os.Getenv("DB_HOST"),
-		dbPort:       os.Getenv("DB_PORT"),
-		mysqlDumpDir: os.Getenv("MYSQLDUMP_DIR"),
-		saveDir:      os.Getenv("SAVE_FOLDER"),
-		sevenZipPath: os.Getenv("7ZIP_PATH"),
+		dbUser:           os.Getenv("DB_USER"),
+		dbPass:           os.Getenv("DB_PASS"),
+		dbHost:           os.Getenv("DB_HOST"),
+		dbPort:           os.Getenv("DB_PORT"),
+		mysqlDumpDir:     os.Getenv("MYSQLDUMP_DIR"),
+		saveDir:          os.Getenv("SAVE_FOLDER"),
+		sevenZipPath:     os.Getenv("7ZIP_PATH"),
+		sendgridAPIKey:   os.Getenv("SENDGRID_API_KEY"),
+		emailToName:      os.Getenv("EMAIL_TO_NAME"),
+		emailToAddress:   os.Getenv("EMAIL_TO_ADDRESS"),
+		emailFromName:    os.Getenv("EMAIL_FROM_NAME"),
+		emailFromAddress: os.Getenv("EMAIL_FROM_EMAIL"),
 	}
 }
 
 func isUserDB(db string) bool {
-	systemDatabases := []string{"information_schema", "sys", "performance_schema", "mysql"}
+	systemDatabases := []string{"information_schema", "sys", "performance_schema"}
 	for _, v := range systemDatabases {
 		if db == v {
 			return false
@@ -149,7 +161,7 @@ func saveDump(db, table, dir string) (string, error) {
 }
 
 func archiveFolder(folderName string) (string, error) {
-	args := []string{"a", folderName, folderName, "-mx9", "-t7z", "-sdel", "-bb1"}
+	args := []string{"a", folderName, folderName, "-mx9", "-t7z", "-sdel", "-bb1", "-slp", "-myx9", "-mmt=24"}
 	cmd := exec.Command(s.sevenZipPath, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -182,15 +194,36 @@ func saveDumps() (string, error) {
 	return b.String(), err
 }
 
+func sendEmail(text string, err error) {
+	from := mail.NewEmail(s.emailFromName, s.emailFromAddress)
+	subject := "Backup OK"
+	if err != nil {
+		subject = fmt.Sprintf("Backup Errored: %v", err)
+	}
+
+	htmlContent := strings.ReplaceAll(strings.TrimSpace(text), "\n", "<br>")
+	to := mail.NewEmail(s.emailToName, s.emailToAddress)
+	message := mail.NewSingleEmail(from, subject, to, ".", htmlContent+"<br>")
+	client := sendgrid.NewSendClient(s.sendgridAPIKey)
+	response, err := client.Send(message)
+	if err != nil {
+		log.Println(err)
+	} else {
+		fmt.Println("EMAIL:")
+		fmt.Println("Status Code: ", response.StatusCode)
+		fmt.Println("Body: ", response.Body)
+		fmt.Println("Headers: ", response.Headers)
+	}
+}
+
 func main() {
 	out, err := saveDumps()
 	if err != nil {
-		fmt.Println("==========")
-		fmt.Println("= ERROR: =")
-		fmt.Println(err)
-		fmt.Println("=========")
+		fmt.Println("ERROR:", err)
 	} else {
 		fmt.Print("OK (no errors). Log:\n\n")
+		fmt.Println(out)
 	}
-	fmt.Println(strings.TrimSpace(out))
+
+	sendEmail(out, err)
 }
