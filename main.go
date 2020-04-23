@@ -18,18 +18,19 @@ import "github.com/sendgrid/sendgrid-go/helpers/mail"
 var s *settings
 
 type settings struct {
-	dbUser           string
-	dbPass           string
-	dbHost           string
-	dbPort           string
-	mysqlDumpDir     string
-	saveDir          string
-	sevenZipPath     string
-	sendgridAPIKey   string
-	emailToAddress   string
-	emailToName      string
-	emailFromName    string
-	emailFromAddress string
+	dbUser            string
+	dbPass            string
+	dbHost            string
+	dbPort            string
+	mysqlDumpDir      string
+	saveDir           string
+	sevenZipPath      string
+	sendgridAPIKey    string
+	emailToAddress    string
+	emailToName       string
+	emailFromName     string
+	emailFromAddress  string
+	skipDatabasesList []string
 }
 
 type database struct {
@@ -38,29 +39,35 @@ type database struct {
 }
 
 func init() {
-	err := godotenv.Load()
+	err := godotenv.Load(".env")
 	if err != nil {
 		log.Fatal("cannot load environmental variables")
 	}
+
+	array := strings.Split(os.Getenv("SKIP_DATABASES"), ",")
+	for i, dirty := range array {
+		array[i] = strings.TrimSpace(dirty)
+	}
+
 	s = &settings{
-		dbUser:           os.Getenv("DB_USER"),
-		dbPass:           os.Getenv("DB_PASS"),
-		dbHost:           os.Getenv("DB_HOST"),
-		dbPort:           os.Getenv("DB_PORT"),
-		mysqlDumpDir:     os.Getenv("MYSQLDUMP_DIR"),
-		saveDir:          os.Getenv("SAVE_FOLDER"),
-		sevenZipPath:     os.Getenv("7ZIP_PATH"),
-		sendgridAPIKey:   os.Getenv("SENDGRID_API_KEY"),
-		emailToName:      os.Getenv("EMAIL_TO_NAME"),
-		emailToAddress:   os.Getenv("EMAIL_TO_ADDRESS"),
-		emailFromName:    os.Getenv("EMAIL_FROM_NAME"),
-		emailFromAddress: os.Getenv("EMAIL_FROM_EMAIL"),
+		dbUser:            os.Getenv("DB_USER"),
+		dbPass:            os.Getenv("DB_PASS"),
+		dbHost:            os.Getenv("DB_HOST"),
+		dbPort:            os.Getenv("DB_PORT"),
+		mysqlDumpDir:      os.Getenv("MYSQLDUMP_DIR"),
+		saveDir:           os.Getenv("SAVE_FOLDER"),
+		sevenZipPath:      os.Getenv("7ZIP_PATH"),
+		sendgridAPIKey:    os.Getenv("SENDGRID_API_KEY"),
+		emailToName:       os.Getenv("EMAIL_TO_NAME"),
+		emailToAddress:    os.Getenv("EMAIL_TO_ADDRESS"),
+		emailFromName:     os.Getenv("EMAIL_FROM_NAME"),
+		emailFromAddress:  os.Getenv("EMAIL_FROM_EMAIL"),
+		skipDatabasesList: array,
 	}
 }
 
 func isUserDB(db string) bool {
-	systemDatabases := []string{"information_schema", "sys", "performance_schema"}
-	for _, v := range systemDatabases {
+	for _, v := range s.skipDatabasesList {
 		if db == v {
 			return false
 		}
